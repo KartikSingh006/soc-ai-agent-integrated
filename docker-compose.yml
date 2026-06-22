@@ -1,0 +1,118 @@
+services:
+  siem-engine:
+    build:
+      context: .
+      dockerfile: siem-engine/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      AI_ORCHESTRATOR_URL: http://ai-orchestrator:8003
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://soc:soc@postgres:5432/soc_db}
+      RUN_MIGRATIONS_ON_STARTUP: ${RUN_MIGRATIONS_ON_STARTUP:-true}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-internal-service-token-change-in-production}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-now}
+    networks:
+      - soc-network
+    depends_on:
+      - elasticsearch
+      - postgres
+
+  tip-platform:
+    build:
+      context: .
+      dockerfile: tip-platform/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      VIRUSTOTAL_BASE_URL: https://www.virustotal.com/api/v3
+      POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://soc:soc@postgres:5432/soc_db}
+      RUN_MIGRATIONS_ON_STARTUP: ${RUN_MIGRATIONS_ON_STARTUP:-true}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-internal-service-token-change-in-production}
+    networks:
+      - soc-network
+    depends_on:
+      - elasticsearch
+      - postgres
+
+  ai-orchestrator:
+    build:
+      context: .
+      dockerfile: ai-orchestrator/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      SIEM_ENGINE_URL: http://siem-engine:8001
+      TIP_PLATFORM_URL: http://tip-platform:8002
+      RESPONSE_ENGINE_URL: http://response-engine:8004
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4}
+      POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://soc:soc@postgres:5432/soc_db}
+      RUN_MIGRATIONS_ON_STARTUP: ${RUN_MIGRATIONS_ON_STARTUP:-true}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-internal-service-token-change-in-production}
+      DJANGO_BASE_URL: ${DJANGO_BASE_URL:-}
+      DJANGO_API_TOKEN: ${DJANGO_API_TOKEN:-}
+      DJANGO_TICKET_ENDPOINT: ${DJANGO_TICKET_ENDPOINT:-/api/tickets/}
+      DJANGO_WEBHOOK_SECRET: ${DJANGO_WEBHOOK_SECRET:-django-webhook-secret-change-in-production}
+    networks:
+      - soc-network
+    depends_on:
+      - tip-platform
+      - response-engine
+      - elasticsearch
+      - postgres
+
+  response-engine:
+    build:
+      context: .
+      dockerfile: response-engine/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      CROWDSTRIKE_BASE_URL: ${CROWDSTRIKE_BASE_URL:-https://api.crowdstrike.com}
+      CROWDSTRIKE_CLIENT_ID: ${CROWDSTRIKE_CLIENT_ID:-}
+      CROWDSTRIKE_CLIENT_SECRET: ${CROWDSTRIKE_CLIENT_SECRET:-}
+      POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://soc:soc@postgres:5432/soc_db}
+      RUN_MIGRATIONS_ON_STARTUP: ${RUN_MIGRATIONS_ON_STARTUP:-true}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-internal-service-token-change-in-production}
+    networks:
+      - soc-network
+    depends_on:
+      - postgres
+
+  dashboard:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+    networks:
+      - soc-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    networks:
+      - soc-network
+
+networks:
+  soc-network:
+    driver: bridge

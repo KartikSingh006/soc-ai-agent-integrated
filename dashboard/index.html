@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOC AI Agent — Console</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #11162a;
+    --surface-2: #161c33;
+    --border: #232b47;
+    --text: #e7eaf2;
+    --muted: #8d96b3;
+    --critical: #f25767;
+    --high: #f5a524;
+    --medium: #38bdf8;
+    --low: #5c6584;
+    --ok: #3ddc97;
+    --accent: #7c9bff;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: radial-gradient(circle at 15% 0%, #121933 0%, var(--bg) 55%);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  a { color: var(--accent); }
+
+  /* ---------- Login ---------- */
+  #login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .brand h1 { font-size: 17px; margin: 0; letter-spacing: 0.02em; }
+  .login-card p.sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.02em; }
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .btn-primary { background: var(--accent); color: #0a0e1a; padding: 10px 16px; width: 100%; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 7px 12px; }
+  .btn-ghost:hover { border-color: var(--accent); }
+  .btn-approve { background: var(--ok); color: #06281b; padding: 6px 12px; }
+  .btn-reject { background: var(--critical); color: #2a0407; padding: 6px 12px; }
+  #login-error { color: var(--critical); font-size: 12px; margin: -8px 0 14px; min-height: 14px; }
+
+  /* ---------- App shell ---------- */
+  #app { display: none; }
+  header.topbar {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .pipeline .node { display: flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+  .pipeline .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--low); }
+  .pipeline .pulse.up { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .pipeline .pulse.down { background: var(--critical); box-shadow: 0 0 6px var(--critical); }
+  .pipeline .arrow { color: var(--border); }
+  .whoami { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  .role-badge { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  main { padding: 22px 24px 60px; max-width: 1280px; margin: 0 auto; }
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .stat-card .num { font-family: var(--mono); font-size: 26px; font-weight: 600; }
+  .stat-card .label { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .stat-card.crit .num { color: var(--critical); }
+  .stat-card.high .num { color: var(--high); }
+
+  .grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .stat-row { grid-template-columns: repeat(2, 1fr); } }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 18px; }
+  .panel h2 { font-size: 13px; margin: 0; padding: 13px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.02em; }
+  .panel h2 .count { font-family: var(--mono); color: var(--muted); font-size: 11px; }
+  .row { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .row:last-child { border-bottom: none; }
+  .row-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .row .id { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .sev { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 5px; font-family: var(--mono); }
+  .sev.critical { background: rgba(242,87,103,0.15); color: var(--critical); }
+  .sev.high { background: rgba(245,165,36,0.15); color: var(--high); }
+  .sev.medium { background: rgba(56,189,248,0.15); color: var(--medium); }
+  .sev.low { background: rgba(92,101,132,0.25); color: var(--muted); }
+  .row .desc { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .empty { padding: 26px 16px; text-align: center; color: var(--muted); font-size: 12px; }
+  .approval-actions { margin-top: 8px; display: flex; gap: 8px; }
+  .scroll { max-height: 420px; overflow-y: auto; }
+
+  #toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; font-size: 13px; display: none; max-width: 320px; }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <form class="login-card" id="login-form">
+    <div class="brand"><span class="dot"></span><h1>SOC AI AGENT</h1></div>
+    <p class="sub">SIEM → TIP → AI Orchestrator → Response Engine</p>
+    <label for="login-username">Username</label>
+    <input type="text" id="login-username" autocomplete="username" required>
+    <label for="login-password">Password</label>
+    <input type="password" id="login-password" autocomplete="current-password" required>
+    <div id="login-error"></div>
+    <button class="btn-primary" type="submit">Sign in</button>
+  </form>
+</div>
+
+<div id="app">
+  <header class="topbar">
+    <div class="pipeline" id="pipeline"></div>
+    <div class="whoami">
+      <span id="whoami-name"></span>
+      <span class="role-badge" id="whoami-role"></span>
+      <button class="btn-ghost" id="logout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="stat-row" id="stat-row"></div>
+
+    <div class="grid">
+      <div>
+        <div class="panel">
+          <h2>Recent Alerts <span class="count" id="alerts-count"></span></h2>
+          <div class="scroll" id="alerts-list"><div class="empty">Loading…</div></div>
+        </div>
+        <div class="panel">
+          <h2>Recent Incidents <span class="count" id="incidents-count"></span></h2>
+          <div class="scroll" id="incidents-list"><div class="empty">Loading…</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2>Pending Approvals <span class="count" id="pending-count"></span></h2>
+          <div id="pending-list"><div class="empty">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const PORTS = { siem: 8001, tip: 8002, orchestrator: 8003, response: 8004 };
+const protoHost = window.location.protocol + "//" + window.location.hostname;
+const API = {
+  siem: `${protoHost}:${PORTS.siem}`,
+  tip: `${protoHost}:${PORTS.tip}`,
+  orchestrator: `${protoHost}:${PORTS.orchestrator}`,
+  response: `${protoHost}:${PORTS.response}`,
+};
+
+let token = localStorage.getItem("soc_token") || null;
+let role = localStorage.getItem("soc_role") || null;
+let username = localStorage.getItem("soc_username") || null;
+
+function showToast(msg, isError) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.style.borderColor = isError ? "var(--critical)" : "var(--border)";
+  el.style.display = "block";
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => { el.style.display = "none"; }, 3500);
+}
+
+async function api(base, path, options = {}) {
+  const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const res = await fetch(base + path, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    doLogout();
+    throw new Error("Session expired — please sign in again");
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+function fmtTime(iso) {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+}
+
+function sevClass(sev) {
+  const s = (sev || "low").toLowerCase();
+  return ["critical", "high", "medium", "low"].includes(s) ? s : "low";
+}
+
+// ---------- Login ----------
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const u = document.getElementById("login-username").value.trim();
+  const p = document.getElementById("login-password").value;
+  const errEl = document.getElementById("login-error");
+  errEl.textContent = "";
+  try {
+    const res = await fetch(`${API.siem}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || "Login failed");
+    }
+    const data = await res.json();
+    token = data.access_token;
+    role = data.role;
+    username = data.username;
+    localStorage.setItem("soc_token", token);
+    localStorage.setItem("soc_role", role);
+    localStorage.setItem("soc_username", username);
+    enterApp();
+  } catch (err) {
+    errEl.textContent = err.message || "Could not reach SIEM Engine on :8001";
+  }
+});
+
+document.getElementById("logout-btn").addEventListener("click", doLogout);
+
+function doLogout() {
+  token = null; role = null; username = null;
+  localStorage.removeItem("soc_token");
+  localStorage.removeItem("soc_role");
+  localStorage.removeItem("soc_username");
+  document.getElementById("app").style.display = "none";
+  document.getElementById("login-screen").style.display = "flex";
+}
+
+function enterApp() {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  document.getElementById("whoami-name").textContent = username;
+  document.getElementById("whoami-role").textContent = role;
+  refreshAll();
+  renderPipeline();
+  setInterval(refreshAll, 15000);
+  setInterval(renderPipeline, 10000);
+}
+
+// ---------- Service health pipeline (the one signature visual) ----------
+async function checkHealth(base) {
+  try {
+    const res = await fetch(base + "/health", { signal: AbortSignal.timeout(4000) });
+    return res.ok;
+  } catch (e) { return false; }
+}
+
+async function renderPipeline() {
+  const services = [
+    { key: "siem", label: "SIEM" },
+    { key: "tip", label: "TIP" },
+    { key: "orchestrator", label: "Orchestrator" },
+    { key: "response", label: "Response" },
+  ];
+  const results = await Promise.all(services.map((s) => checkHealth(API[s.key])));
+  const el = document.getElementById("pipeline");
+  el.innerHTML = services.map((s, i) => {
+    const up = results[i];
+    const node = `<span class="node"><span class="pulse ${up ? "up" : "down"}"></span>${s.label}</span>`;
+    return i < services.length - 1 ? node + `<span class="arrow">→</span>` : node;
+  }).join("");
+}
+
+// ---------- Data loading ----------
+async function refreshAll() {
+  await Promise.all([loadStats(), loadAlerts(), loadIncidents(), loadPending()]);
+}
+
+async function loadStats() {
+  try {
+    const stats = await api(API.siem, "/dashboard/stats");
+    document.getElementById("stat-row").innerHTML = `
+      <div class="stat-card"><div class="num">${stats.total_alerts}</div><div class="label">Total alerts</div></div>
+      <div class="stat-card crit"><div class="num">${stats.critical_alerts}</div><div class="label">Critical</div></div>
+      <div class="stat-card high"><div class="num">${stats.high_alerts}</div><div class="label">High</div></div>
+      <div class="stat-card"><div class="num">${stats.open_tickets}</div><div class="label">Open tickets</div></div>
+    `;
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function loadAlerts() {
+  try {
+    const alerts = await api(API.siem, "/alerts");
+    const top = alerts.slice(0, 12);
+    document.getElementById("alerts-count").textContent = alerts.length;
+    document.getElementById("alerts-list").innerHTML = top.length ? top.map((a) => `
+      <div class="row">
+        <div class="row-top">
+          <span class="id">${a.alert_id}</span>
+          <span class="sev ${sevClass(a.severity)}">${a.severity}</span>
+        </div>
+        <div class="desc">${a.rule_triggered} — ${a.asset} · ${a.status} · ${fmtTime(a.timestamp)}</div>
+      </div>
+    `).join("") : `<div class="empty">No alerts yet — trigger one with POST /simulate</div>`;
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function loadIncidents() {
+  try {
+    const incidents = await api(API.orchestrator, "/incidents");
+    const top = incidents.slice(0, 10);
+    document.getElementById("incidents-count").textContent = incidents.length;
+    document.getElementById("incidents-list").innerHTML = top.length ? top.map((i) => `
+      <div class="row">
+        <div class="row-top">
+          <span class="id">${i.incident_id}</span>
+          <span class="sev ${sevClass(i.severity)}">${i.severity}</span>
+        </div>
+        <div class="desc">${i.incident_type} · ${i.status}${i.django_ticket_id ? " · ticket " + i.django_ticket_id : ""} · ${fmtTime(i.created_at)}</div>
+      </div>
+    `).join("") : `<div class="empty">No incidents yet</div>`;
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function loadPending() {
+  try {
+    const pending = await api(API.orchestrator, "/response-actions/pending");
+    document.getElementById("pending-count").textContent = pending.length;
+    const canApprove = role === "analyst" || role === "admin";
+    document.getElementById("pending-list").innerHTML = pending.length ? pending.map((p) => `
+      <div class="row">
+        <div class="row-top">
+          <span class="id">${p.action_id}</span>
+        </div>
+        <div class="desc">${p.action_type} → ${p.target} · incident ${p.incident_id || "—"} · requested ${fmtTime(p.requested_at)}</div>
+        ${canApprove ? `
+          <div class="approval-actions">
+            <button class="btn-approve" data-id="${p.action_id}" data-act="approve">Approve</button>
+            <button class="btn-reject" data-id="${p.action_id}" data-act="reject">Reject</button>
+          </div>` : `<div class="desc">Viewer role cannot approve actions</div>`}
+      </div>
+    `).join("") : `<div class="empty">Nothing waiting on a human right now</div>`;
+
+    document.querySelectorAll(".approval-actions button").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        const act = btn.dataset.act;
+        btn.disabled = true;
+        try {
+          await api(API.orchestrator, `/response-actions/${id}/${act}`, { method: "POST" });
+          showToast(`Action ${id} ${act === "approve" ? "approved and executed" : "rejected"}`);
+          loadPending();
+          loadIncidents();
+        } catch (err) {
+          showToast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) { showToast(err.message, true); }
+}
+
+if (token) enterApp();
+</script>
+</body>
+</html>
